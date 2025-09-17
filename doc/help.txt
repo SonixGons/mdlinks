@@ -1,0 +1,140 @@
+*mdlinks.txt*    Markdown Links: open and navigate                                *mdlinks*
+
+OVERVIEW                                                                 *mdlinks-overview*
+    mdlinks provides focused navigation and opening of Markdown entities:
+      • Inline links:        [label](target)
+      • Reference links:     [label][id] and [label][] with single-line defs [id]: ...
+      • Footnotes:           [^id]  ↔  [^id]: ...
+      • Autolinks/URLs:      <https://...> and bare http(s) URLs under the cursor
+
+    Behavior:
+      • target starts with "#…"                 → jump to the matching heading in-buffer
+      • target is a web URL (http/https/ftp/mailto) → open in the default browser
+      • target is a local path                  → open in the system app (e.g. PDF viewer)
+
+    Platforms:
+      • Linux/macOS:     xdg-open / open
+      • Windows:         PowerShell Start-Process (fallback: cmd.exe /c start)
+      • WSL:             wslview (if available) or powershell.exe Start-Process
+
+INSTALLATION (Lazy.nvim)                                                     *mdlinks-install*
+>
+    {
+      dir = vim.fn.expand("~/dev/mdlinks"), -- or your repo path
+      ft = "markdown",
+      config = function()
+        require("mdlinks.config").setup({
+          keymap = "j",                    -- follow entity under cursor
+          footnote_backref_key = "K",      -- from [^id]: jump back to first [^id] reference
+          open_cmd = nil,                  -- nil = auto (xdg-open/open/Win adapter)
+          open_url_cmd = nil,              -- e.g. {"firefox","--new-tab"} or Safari new-tab args
+          anchor_levels = {1,2,3,4,5,6},   -- ATX heading levels to consider
+        })
+        require("mdlinks.commands").register_user_commands()
+      end,
+    }
+<
+
+MAPPINGS                                                                 *mdlinks-maps*
+    Buffer-local Normal-mode mappings (Markdown buffers only):
+
+      j        Follow under cursor: detect link/ref/url/footnote and act accordingly
+      K        (optional) Backref: from footnote definition to the first reference
+
+    Both keys are configurable via setup:
+      • keymap = "j"
+      • footnote_backref_key = "K"
+
+COMMANDS                                                                 *mdlinks-commands*
+    :MdlinksFollow
+        Performs the same action as the mapping (follow under cursor). Emits a
+        notification on error.
+
+    :MdlinksFootnoteBack
+        When on a footnote definition line  [^id]: ...  jumps back to the first
+        occurrence of  [^id]  in the document.
+
+CONFIGURATION                                                            *mdlinks-config*
+    Configure via  require("mdlinks.config").setup({ ... }).
+
+    Options:
+      keymap                                  (string|nil)
+          Normal-mode key in Markdown buffers to trigger "follow".
+          Default: "j".  nil → no mapping.
+
+      footnote_backref_key                    (string|nil)
+          Normal-mode key for jumping back from a footnote definition line to the
+          first reference. Default: nil (disabled).
+
+      open_cmd                                (string|string[]|nil)
+          Override the opener command for files/paths:
+            • Linux:   "xdg-open"
+            • macOS:   "open"
+            • Windows: {"powershell","-NoProfile","-Command","Start-Process"}
+                        or {"cmd.exe","/c","start",""}
+          Default: nil (auto-detected per platform).
+
+      open_url_cmd                            (string|string[]|nil)
+          Like open_cmd, but specifically for web URLs (http/https/ftp/mailto).
+          Example macOS (Safari new tab):
+            {"open","-a","Safari","--args","-new-tab"}
+          Example Linux (Firefox new tab):
+            {"firefox","--new-tab"}
+          Default: nil → falls back to open_cmd or platform opener.
+
+      anchor_levels                           (integer[])
+          ATX heading levels (1..6) considered for anchor jumps.
+          Default: {1,2,3,4,5,6}.
+
+BEHAVIOR DETAILS                                                        *mdlinks-behavior*
+    Entity detection order under the cursor:
+      1. <https://...> or bare http(s) URL → open in browser
+      2. Inline link [label](target)       → depending on target:
+         • "#…" → jump to the corresponding heading (normalized anchor)
+         • URL  → open in browser
+         • else → treat as local path and open with system opener
+      3. Reference link [label][id] / [label][]
+         → resolves via a single-line definition:  [id]: target  ("title" is ignored)
+      4. Footnote [^id] → jump to  [^id]: ...  definition
+      5. On a definition line  [^id]: ...  use the mapping or :MdlinksFootnoteBack
+         to jump back to the first reference.
+
+    Anchor normalization:
+      • strips leading "#", lowercases, collapses whitespace to "-", and removes
+        basic punctuation. This matches common GitHub-style anchors.
+
+    Supported headings:
+      • ATX headings  (#, ##, ###, …). Setext headings are not implemented.
+
+PLATFORM NOTES                                                          *mdlinks-platform*
+    Linux:
+      • Uses xdg-open. Desktop environments typically provide it.
+    macOS:
+      • Uses open. To force “new tab” in a specific browser, set open_url_cmd.
+    Windows (native):
+      • Prefers PowerShell Start-Process (argv-friendly with jobstart).
+        Fallback is cmd.exe /c start "" <target>.
+    WSL:
+      • Prefers wslview (from wslu). Fallback: powershell.exe Start-Process.
+        Files/URLs then open in the Windows default app.
+
+LIMITATIONS                                                           *mdlinks-limitations*
+    • Reference definitions must be single-line:
+        [id]: target "optional title"
+      Multi-line definitions are not parsed.
+    • Setext headings and complex Pandoc-style citations ([@key]) are out of scope.
+      If you want such citations to be “followable”, keep a reference definition:
+        [key]: https://example.org/paper
+
+API                                                                      *mdlinks-api*
+    Lua:
+      require("mdlinks.config").setup(opts)
+      require("mdlinks.commands").register_user_commands()
+      require("mdlinks.core.nav").follow_under_cursor()
+      require("mdlinks.core.nav").jump_footnote_backref()
+
+CHANGELOG                                                             *mdlinks-changelog*
+    0.1.0  Initial release with Linux/macOS and optional Windows/WSL adapters.
+
+AUTHOR                                                                  *mdlinks-author*
+    mdlinks – a minimalist, focused Markdown link follow plugin.
