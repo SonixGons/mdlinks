@@ -5,40 +5,49 @@ OVERVIEW                                                                 *mdlink
       • Inline links:        [label](target)
       • Reference links:     [label][id] and [label][] with single-line defs [id]: ...
       • Footnotes:           [^id]  ↔  [^id]: ...
-      • Autolinks/URLs:      <https://...> and bare http(s) URLs under the cursor
+      • Autolinks/URLs:      <https://...> and bare http(s) URLs under/near the cursor
 
     Behavior:
+      • If the cursor is not inside a link, mdlinks picks the **nearest link on the line**.
       • target starts with "#…"                 → jump to the matching heading in-buffer
       • target is a web URL (http/https/ftp/mailto) → open in the default browser
-      • target is a local path                  → open in the system app (e.g. PDF viewer)
+      • target is a local path:
+          - text-like (*.md, *.txt, *.lua, *.json, *.toml, *.ya?ml) → open via :edit
+          - everything else (PDFs, images, …) → open via system app (argv opener)
+
+    Anchors (GitHub-style):
+      • Lowercased, whitespace → '-', basic punctuation removed, duplicate-aware slugs:
+        "# Foo", "# Foo"  →  anchors "foo" and "foo-1"
+      • Works with `[go](#my-heading)` and level-aware `[go](## My Heading)` forms.
 
     Platforms:
-      • Linux/macOS:     xdg-open / open
-      • Windows:         PowerShell Start-Process (fallback: cmd.exe /c start)
-      • WSL:             wslview (if available) or powershell.exe Start-Process
+      • Linux:           xdg-open
+      • macOS:           open
+      • Windows:         cmd.exe /c start "" <target>   (primary; respects associations)
+                          fallback: powershell.exe -NoProfile -Command Start-Process
+      • WSL:             wslview (if available) else powershell.exe Start-Process
 
 INSTALLATION (Lazy.nvim)                                                     *mdlinks-install*
 >
     {
-      dir = vim.fn.expand("~/dev/mdlinks"), -- or your repo path
-      ft = "markdown",
+      -- "dir" or "name" depending on your setup
+      -- dir = vim.fn.expand("~/dev/mdlinks"),
+      lazy = false, -- ensure command is available
       config = function()
-        require("mdlinks.config").setup({
-          keymap = "j",                    -- follow entity under cursor
-          footnote_backref_key = "K",      -- from [^id]: jump back to first [^id] reference
-          open_cmd = nil,                  -- nil = auto (xdg-open/open/Win adapter)
-          open_url_cmd = nil,              -- e.g. {"firefox","--new-tab"} or Safari new-tab args
-          anchor_levels = {1,2,3,4,5,6},   -- ATX heading levels to consider
+        require("mdlinks").setup({
+          keymap = "j",                    -- follow entity under/near cursor
+          footnote_backref_key = "K",      -- optional footnote backref
+          open_cmd = nil,                  -- nil = platform default (argv form)
+          open_url_cmd = nil,              -- override to force specific browser
+          anchor_levels = {1,2,3,4,5,6},
+          debug = false,                   -- center view after jumps (zz)
         })
-        require("mdlinks.commands").register_user_commands()
       end,
     }
 <
-
-MAPPINGS                                                                 *mdlinks-maps*
-    Buffer-local Normal-mode mappings (Markdown buffers only):
-
-      j        Follow under cursor: detect link/ref/url/footnote and act accordingly
+KEYMAPS                                                                 *mdlinks-keymaps*
+    Default suggestion:
+      j        Follow under cursor (or nearest on line)
       K        (optional) Backref: from footnote definition to the first reference
 
     Both keys are configurable via setup:
@@ -47,76 +56,64 @@ MAPPINGS                                                                 *mdlink
 
 COMMANDS                                                                 *mdlinks-commands*
     :MdlinksFollow
-        Performs the same action as the mapping (follow under cursor). Emits a
-        notification on error.
+        Follow the Markdown entity under the cursor; if none, pick the
+        nearest entity on the current line. Notifies on error.
 
     :MdlinksFootnoteBack
         When on a footnote definition line  [^id]: ...  jumps back to the first
         occurrence of  [^id]  in the document.
 
 CONFIGURATION                                                            *mdlinks-config*
-    Configure via  require("mdlinks.config").setup({ ... }).
+    Lua:
+      require("mdlinks").setup({ ... })     " see :h mdlinks-install
 
     Options:
-      keymap                                  (string|nil)
-          Normal-mode key in Markdown buffers to trigger "follow".
-          Default: "j".  nil → no mapping.
 
-      footnote_backref_key                    (string|nil)
-          Normal-mode key for jumping back from a footnote definition line to the
-          first reference. Default: nil (disabled).
+      keymap                                    (string|nil)
+          Normal-mode mapping for follow. If nil, no key is set.
 
-      open_cmd                                (string|string[]|nil)
-          Override the opener command for files/paths:
-            • Linux:   "xdg-open"
-            • macOS:   "open"
-            • Windows: {"powershell","-NoProfile","-Command","Start-Process"}
-                        or {"cmd.exe","/c","start",""}
-          Default: nil (auto-detected per platform).
+      footnote_backref_key                      (string|nil)
+          Mapping for backref from footnote definitions. If nil, not set.
 
-      open_url_cmd                            (string|string[]|nil)
-          Like open_cmd, but specifically for web URLs (http/https/ftp/mailto).
-          Example macOS (Safari new tab):
-            {"open","-a","Safari","--args","-new-tab"}
-          Example Linux (Firefox new tab):
-            {"firefox","--new-tab"}
-          Default: nil → falls back to open_cmd or platform opener.
+      open_cmd                                  (string|string[]|nil)
+          Override the opener command for files/paths (argv preferred).
+          Examples:
+            • Linux:   {"xdg-open"}
+            • macOS:   {"open"}
+            • Windows: {"cmd.exe","/c","start",""}   (primary)
+                       {"powershell.exe","-NoProfile","-Command","Start-Process"}  (fallback)
+          Default: nil (auto-detected per platform as above).
 
-      anchor_levels                           (integer[])
+      open_url_cmd                              (string|string|nil)
+          Like open_cmd, but specifically for web URLs. If nil, falls back to
+          platform default (same as open_cmd).
+
+      anchor_levels                             (integer[])
           ATX heading levels (1..6) considered for anchor jumps.
           Default: {1,2,3,4,5,6}.
 
+      debug                                     (boolean|nil)
+          If true: center screen (zz) after successful jumps. Default: false.
+
 BEHAVIOR DETAILS                                                        *mdlinks-behavior*
-    Entity detection order under the cursor:
+    Entity selection order (cursor position aware, with line fallback):
       1. <https://...> or bare http(s) URL → open in browser
       2. Inline link [label](target)       → depending on target:
-         • "#…" → jump to the corresponding heading (normalized anchor)
+         • "#…" → jump by GH-style slug (duplicate-aware)
          • URL  → open in browser
-         • else → treat as local path and open with system opener
+         • else → treat as local path (text-like → :edit; otherwise system app)
       3. Reference link [label][id] / [label][]
-         → resolves via a single-line definition:  [id]: target  ("title" is ignored)
+         → resolves via a single-line definition:  [id]: target  ("title" ignored)
       4. Footnote [^id] → jump to  [^id]: ...  definition
-      5. On a definition line  [^id]: ...  use the mapping or :MdlinksFootnoteBack
-         to jump back to the first reference.
+      5. On a definition line  [^id]: ...  use :MdlinksFootnoteBack to jump back.
 
-    Anchor normalization:
-      • strips leading "#", lowercases, collapses whitespace to "-", and removes
-        basic punctuation. This matches common GitHub-style anchors.
-
-    Supported headings:
-      • ATX headings  (#, ##, ###, …). Setext headings are not implemented.
-
-PLATFORM NOTES                                                          *mdlinks-platform*
-    Linux:
-      • Uses xdg-open. Desktop environments typically provide it.
-    macOS:
-      • Uses open. To force “new tab” in a specific browser, set open_url_cmd.
-    Windows (native):
-      • Prefers PowerShell Start-Process (argv-friendly with jobstart).
-        Fallback is cmd.exe /c start "" <target>.
-    WSL:
-      • Prefers wslview (from wslu). Fallback: powershell.exe Start-Process.
-        Files/URLs then open in the Windows default app.
+HEALTH CHECK                                                            *mdlinks-health*
+    :checkhealth mdlinks
+        Diagnostics for common setup issues:
+          • Neovim version & OS/WSL detection
+          • Config sanity (keymaps, anchor_levels, debug)
+          • Openers availability (open_cmd/open_url_cmd argv & executables)
+          • Parser self-test (recognizes url/heading/image/file on a sample line)
 
 LIMITATIONS                                                           *mdlinks-limitations*
     • Reference definitions must be single-line:
@@ -128,13 +125,14 @@ LIMITATIONS                                                           *mdlinks-l
 
 API                                                                      *mdlinks-api*
     Lua:
-      require("mdlinks.config").setup(opts)
-      require("mdlinks.commands").register_user_commands()
-      require("mdlinks.core.nav").follow_under_cursor()
-      require("mdlinks.core.nav").jump_footnote_backref()
+      require("mdlinks").setup(opts)
+      -- Commands are auto-registered via plugin/mdlinks.lua
+      require("mdlinks.nav").follow_under_cursor()
+      require("mdlinks.nav").jump_footnote_backref()
 
 CHANGELOG                                                             *mdlinks-changelog*
-    0.1.0  Initial release with Linux/macOS and optional Windows/WSL adapters.
+    0.2.0  Line fallback, GitHub-style duplicate-aware anchor slugs, :checkhealth.
+    0.1.0  Initial release with Linux/macOS + Windows/WSL openers.
 
 AUTHOR                                                                  *mdlinks-author*
     mdlinks – a minimalist, focused Markdown link follow plugin.

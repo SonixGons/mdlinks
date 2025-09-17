@@ -8,7 +8,7 @@ local M = {}
 ---@return nil
 function M.follow_under_cursor()
   local bufnr = vim.api.nvim_get_current_buf()
-  local row, col = unpack(vim.api.nvim_win_get_cursor(0)) -- 1-based
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
   local line = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1] or ""
 
   -- Prefer link under cursor; fallback to nearest/first on the line

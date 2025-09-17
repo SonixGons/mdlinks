@@ -142,8 +142,6 @@ function M.setup(opts)
 	state = cfg
 	M.cfg = cfg
 
-	require("mdlinks.commands").register_user_commands()
-
 	if cfg.keymap then
 		vim.keymap.set("n", cfg.keymap, function()
 			vim.cmd("silent! MdlinksFollow")
