@@ -33,4 +33,11 @@ function M.register_user_commands()
   end, { desc = "Jump from footnote definition back to first reference" })
 end
 
+    local ok_nav = pcall(require, "mdlinks.core.nav")
+    if not ok_nav then
+      vim.notify("[mdlinks] internal error: nav not available", vim.log.levels.ERROR)
+      return
+    end
+
+
 return M

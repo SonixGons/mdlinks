@@ -19,6 +19,7 @@ local defaults = {
   open_url_cmd = nil,
   anchor_levels = { 1, 2, 3, 4, 5, 6 },
 	debug = false,
+  line_fallback = true, -- try first link on the line if none under cursor
 }
 
 ---@type MdlinksConfig
@@ -50,13 +51,13 @@ function M.setup(opts)
   if type(opts.open_url_cmd) == "string" or is_array(opts.open_url_cmd) then s.open_url_cmd = opts.open_url_cmd end
   if is_array(opts.anchor_levels) then s.anchor_levels = opts.anchor_levels end
   if type(opts.debug) == "boolean" then s.debug = opts.debug end
+  if type(opts.line_fallback) == "boolean" then s.line_fallback = opts.line_fallback end
 
-  -- platform defaults only if not set by user
+  -- platform defaults if unset
   if s.open_cmd == nil or s.open_url_cmd == nil then
     local is_win = (vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1)
     local is_wsl = (vim.fn.has("wsl") == 1)
     local is_mac = (vim.fn.has("mac") == 1 or vim.fn.has("macunix") == 1)
-
     if is_win and not is_wsl then
       s.open_cmd     = s.open_cmd     or { "cmd.exe", "/c", "start", "" }
       s.open_url_cmd = s.open_url_cmd or { "cmd.exe", "/c", "start", "" }

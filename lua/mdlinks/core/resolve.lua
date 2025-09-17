@@ -1,99 +1,65 @@
----@module 'mdlinks.core.resolve'
---- Resolution utilities: headings, reference definitions, footnotes.
---- Pure logic, no UI. Returns plain data or nil.
-
-local Strings = require("mdlinks.utils.strings")
-
+---@module 'mdlinks.resolve'
 local M = {}
 
---- Convert heading line to normalized anchor and level.
+---@param bufnr integer
+---@return string
+local function buf_dir(bufnr)
+  local p = vim.api.nvim_buf_get_name(bufnr)
+  if p == "" then return vim.uv.cwd() end
+  return vim.fn.fnamemodify(p, ":p:h")
+end
+
 ---@param s string
----@return string|nil, integer|nil
-function M.heading_to_anchor(s)
-  local hashes, text = s:match("^(#+)%s*(.-)%s*$")
-  if not hashes or text == "" then return nil end
-  return Strings.normalize_anchor(text), #hashes
+---@return boolean
+local function looks_windows_abs(s)
+  -- "E:/path/.." or "C:\path\.."
+  return s:match("^[A-Za-z]:[\\/]")
 end
 
---- Find first line whose heading anchor equals `anchor` and level in `levels`.
----@param anchor string
----@param levels integer[]
----@return integer|nil
-function M.find_heading_line(anchor, levels)
-  local bufnr = vim.api.nvim_get_current_buf()
-  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  for i = 1, #lines do
-    local a, lvl = M.heading_to_anchor(lines[i])
-    if a and a == anchor then
-      for _, L in ipairs(levels) do
-        if L == lvl then return i end
-      end
-    end
+---@param base string
+---@param rel string
+---@return string
+local function join(base, rel)
+  if rel:match("^[\\/%.]") then
+    return vim.fn.fnamemodify(base .. "/" .. rel, ":p")
+  else
+    return vim.fn.fnamemodify(base .. "/" .. rel, ":p")
   end
-  return nil
 end
 
---- Resolve `[id]: target "title"` reference definition.
----@param id string
----@return RefDefinition|nil
-function M.resolve_reference_definition(id)
-  local function norm(s)
-    s = (s or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    s = s:gsub("%s+", " ")
-    return s:lower()
-  end
-  local nid = norm(id)
-  local bufnr = vim.api.nvim_get_current_buf()
-  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  for i = 1, #lines do
-    local k, rest = lines[i]:match("^%s*%[([^%]]+)%]%s*:%s*(.+)$")
-    if k and norm(k) == nid then
-      local target = rest:gsub('%s+".*"$', ""):match("^%s*(.-)%s*$")
-      return { target = target, line = i }
-    end
-  end
-  return nil
-end
+---@class Resolved
+---@field kind "url"|"file"|"image"|"heading"
+---@field url? string
+---@field path? string
+---@field heading? { level: integer, text: string }
 
---- Resolve `[^id]: ...` footnote definition line number.
----@param id string
----@return integer|nil
-function M.resolve_footnote_definition_line(id)
-  local function norm(s)
-    s = (s or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    s = s:gsub("%s+", " ")
-    return s:lower()
-  end
-  local nid = norm(id)
-  local bufnr = vim.api.nvim_get_current_buf()
-  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  for i = 1, #lines do
-    local key = lines[i]:match("^%s*%[%^([^%]]+)%]%s*:")
-    if key and norm(key) == nid then
-      return i
-    end
-  end
-  return nil
-end
+---@param bufnr integer
+---@param link MdLink
+---@return Resolved|nil
+function M.resolve(bufnr, link)
+  if type(link) ~= "table" then return nil end
 
---- First `[^id]` reference line (to jump back from definition).
----@param id string
----@return integer|nil
-function M.find_first_footnote_reference_line(id)
-  local function norm(s)
-    s = (s or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    s = s:gsub("%s+", " ")
-    return s:lower()
-  end
-  local nid = norm(id)
-  local bufnr = vim.api.nvim_get_current_buf()
-  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  for i = 1, #lines do
-    for _, key in lines[i]:gmatch("()%[%^([^%]]+)%]()") do
-      if norm(key) == nid then return i end
+  if link.kind == "url" then
+    return { kind = "url", url = link.target }
+  elseif link.kind == "heading" then
+    -- Normalize "##test" / "## test"
+    local hashes, text = link.target:match("^%s*(#+)%s*(.*)$")
+    local level = hashes and #hashes or 1
+    text = (text or ""):gsub("%s+$", "")
+    return { kind = "heading", heading = { level = level, text = text } }
+  else
+    local t = link.target
+    -- Strip surrounding quotes for paths like ("./foo bar.pdf")
+    t = (t:gsub('^"(.*)"$', "%1"):gsub("^'(.*)'$", "%1"))
+
+    local path
+    if looks_windows_abs(t) or t:match("^/") or t:match("^~[/\\]") then
+      path = vim.fn.fnamemodify(t, ":p")
+    else
+      path = join(buf_dir(bufnr), t)
     end
+    return { kind = link.kind, path = path }
   end
-  return nil
 end
 
 return M
