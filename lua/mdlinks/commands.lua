@@ -1,6 +1,4 @@
 ---@module 'mdlinks.commands'
---- User commands; UI layer is allowed to notify.
---- Low-level modules never call vim.notify directly (per rules).
 
 ---@class MdlinksCommands
 local M = {}
@@ -14,9 +12,13 @@ function M.register_user_commands()
     end
     local ok, err = nav.follow_under_cursor()
     if not ok then
-      -- Surface common reasons with a friendly message
-      local msg = ("[mdlinks] %s"):format(err or "no markdown entity under cursor")
-      vim.notify(msg, vim.log.levels.WARN)
+      vim.notify(("[mdlinks] %s"):format(err or "no markdown entity under cursor"), vim.log.levels.WARN)
+      return
+    end
+    -- Optional UI nicety: center after successful jumps/opens
+    local cfg_ok, cfg = pcall(require, "mdlinks.core.config")
+    if cfg_ok and cfg.get and cfg.get().debug then
+      vim.cmd("normal! zz")
     end
   end, { desc = "Follow markdown entity (link/ref/url/footnote) under cursor" })
 
@@ -32,12 +34,5 @@ function M.register_user_commands()
     end
   end, { desc = "Jump from footnote definition back to first reference" })
 end
-
-    local ok_nav = pcall(require, "mdlinks.core.nav")
-    if not ok_nav then
-      vim.notify("[mdlinks] internal error: nav not available", vim.log.levels.ERROR)
-      return
-    end
-
 
 return M

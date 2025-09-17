@@ -1,104 +1,145 @@
----@module 'mdlinks.open'
+---@module 'mdlinks.core.open'
 local M = {}
 
----@return "windows"|"mac"|"linux"
 local function platform()
   if vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1 then return "windows" end
   if vim.fn.has("mac") == 1 then return "mac" end
   return "linux"
 end
 
----@param args string[]
----@return nil
-local function spawn_detached(args)
-  -- Silent, detached job
-  vim.fn.jobstart(args, { detach = true })
+---@param argv string[]
+---@return boolean, string|nil
+local function job_detached(argv)
+  if type(argv) ~= "table" or #argv == 0 then
+    return false, "invalid opener argv"
+  end
+  local ok = pcall(vim.fn.jobstart, argv, { detach = true })
+  if not ok then
+    return false, "failed to spawn opener"
+  end
+  return true
 end
 
 ---@param url string
----@return nil
+---@return boolean, string|nil
 function M.open_url(url)
+  -- If you have user-configurable open_url_cmd, normalize & use it here.
   local pf = platform()
   if pf == "windows" then
-    -- Use start via cmd to respect default browser
-    spawn_detached({ "cmd.exe", "/c", "start", "", url })
+    return job_detached({ "cmd.exe", "/c", "start", "", url })
   elseif pf == "mac" then
-    spawn_detached({ "open", url })
+    return job_detached({ "open", url })
   else
-    spawn_detached({ "xdg-open", url })
+    return job_detached({ "xdg-open", url })
   end
 end
 
----@param path string
----@return nil
-local function open_with_system(path)
-  local pf = platform()
-  if pf == "windows" then
-    spawn_detached({ "cmd.exe", "/c", "start", "", path })
-  elseif pf == "mac" then
-    spawn_detached({ "open", path })
-  else
-    spawn_detached({ "xdg-open", path })
-  end
-end
-
----@param path string
----@return boolean
 local function is_text_like(path)
-  local lower = path:lower()
-  return lower:match("%.md$") or lower:match("%.txt$") or lower:match("%.lua$")
-      or lower:match("%.json$") or lower:match("%.toml$") or lower:match("%.yaml$")
-end
-
----@param path string
----@return boolean
-local function is_image(path)
   local l = path:lower()
-  return l:match("%.png$") or l:match("%.jpe?g$") or l:match("%.gif$")
-      or l:match("%.webp$") or l:match("%.bmp$") or l:match("%.svg$")
+  return l:match("%.md$") or l:match("%.txt$") or l:match("%.lua$")
+      or l:match("%.json$") or l:match("%.toml$") or l:match("%.ya?ml$")
 end
 
 ---@param path string
----@return boolean
-local function is_pdf(path)
-  return path:lower():match("%.pdf$") ~= nil
-end
-
----@param path string
----@return nil
+---@return boolean, string|nil
 function M.open_path(path)
   if is_text_like(path) then
-    -- open in current window as a buffer
-    vim.cmd.edit(vim.fn.fnameescape(path))
+    local ok, _ = pcall(function()
+      vim.cmd.edit(vim.fn.fnameescape(path))
+    end)
+    if not ok then
+      return false, "failed to :edit file"
+    end
+    return true
+  end
+  local pf = platform()
+  if pf == "windows" then
+    return job_detached({ "cmd.exe", "/c", "start", "", path })
+  elseif pf == "mac" then
+    return job_detached({ "open", path })
   else
-    -- Let OS pick the associated app (PDF viewer, image viewer, etc.)
-    open_with_system(path)
+    return job_detached({ "xdg-open", path })
   end
 end
 
----@param level integer
+---@param level integer|nil
 ---@param text string
----@return nil
+---@return boolean, string|nil
 function M.jump_to_heading(level, text)
-  -- Exact prefix with that many #'s, then optional spaces, then text
-  -- We keep it simple on purpose: your example uses exact "## test".
-  local pat
-  if text == "" then
-    pat = string.format("^%s%s", string.rep("#", level), "%s*$")
-  else
-    -- Escape magic chars in text
-    local esc = vim.pesc(text)
-    pat = string.format("^%s%%s*%s%%s*$", string.rep("#", level), esc)
+  local bufnr = vim.api.nvim_get_current_buf()
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+
+  local function slugify(s)
+    s = tostring(s or ""):gsub("`", ""):lower()
+    s = s:gsub("%s+", "-"):gsub("[^%w%-_]", ""):gsub("%-+", "-"):gsub("^%-+", ""):gsub("%-+$", "")
+    return s
   end
 
-  -- Try from top; keep cursor history
-  local save = vim.api.nvim_win_get_cursor(0)
-  vim.api.nvim_win_set_cursor(0, { 1, 0 })
-  local ok = vim.fn.search(pat, "W") ~= 0
-  if not ok then
-    vim.api.nvim_win_set_cursor(0, save)
-    vim.notify("[mdlinks] Heading not found: " .. string.rep("#", level) .. " " .. text, vim.log.levels.WARN)
+  local target_slug ---@type string|nil
+  local prefer_level = tonumber(level)
+
+  local function looks_sluggy(t) return t:find("%-") or (t == t:lower() and not t:find("%u")) end
+  if not prefer_level then
+    target_slug = slugify(text)
+  else
+    if text == "" or text:sub(1,1) == "-" or looks_sluggy(text) then
+      target_slug = slugify(text:gsub("^%-+", ""))
+    end
   end
+
+  ---@class H
+  ---@field lnum integer
+  ---@field level integer
+  ---@field text string
+  ---@field slug string
+  local heads, counts = {}, {}
+  for i = 1, #lines do
+    local s = lines[i] or ""
+    local hashes, htxt = s:match("^%s*(#+)%s*(.-)%s*$")
+    if hashes and htxt and htxt ~= "" then
+      local lev = #hashes
+      local base = slugify(htxt)
+      if base ~= "" then
+        local n = (counts[base] or 0) + 1
+        counts[base] = n
+        local final = (n > 1) and (base .. "-" .. (n - 1)) or base
+        heads[#heads + 1] = { lnum = i, level = lev, text = htxt, slug = final }
+      end
+    end
+  end
+  if #heads == 0 then
+    return false, "no markdown headings in buffer"
+  end
+
+  local function normtxt(s) return (s or ""):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""):lower() end
+  local target_text_norm = normtxt(text)
+  local slug_of_text = slugify(text)
+
+  local function matches(h)
+    return not prefer_level or h.level == prefer_level
+  end
+
+  local found
+  if target_slug and target_slug ~= "" then
+    for _, h in ipairs(heads) do if matches(h) and h.slug == target_slug then found = h; break end end
+  end
+  if not found and not target_slug and target_text_norm ~= "" then
+    for _, h in ipairs(heads) do if matches(h) and normtxt(h.text) == target_text_norm then found = h; break end end
+  end
+  if not found and target_text_norm ~= "" then
+    for _, h in ipairs(heads) do if matches(h) and h.slug == slug_of_text then found = h; break end end
+  end
+  if not found then
+    local want = (prefer_level and (string.rep("#", prefer_level) .. " ") or "# ") .. text
+    return false, ("heading not found: %s"):format(want)
+  end
+
+  -- Jump (keep jumplist) – UI centering (zz) bleibt Aufgabe der UI-Schicht
+  local ok = pcall(vim.api.nvim_win_set_cursor, 0, { found.lnum, 0 })
+  if not ok then
+    return false, "failed to move cursor"
+  end
+  return true
 end
 
 return M

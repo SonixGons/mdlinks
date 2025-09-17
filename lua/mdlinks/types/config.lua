@@ -1,0 +1,65 @@
+---@module 'mdlinks.core.types.config'
+
+---@class MdlinksConfig
+--- User-facing configuration for mdlinks.
+--- All fields are optional; sensible defaults are applied in `M._with_defaults()`.
+--- Notes:
+--- - All code comments are in English (your preference).
+--- - Types are LuaLS/EmmyLua friendly for great autocompletion.
+---
+--- ### Key fields overview
+--- - `keymap`: Normal-mode mapping to trigger “follow under cursor / line”.
+--- - `footnote_backref_key`: Mapping to jump back from a footnote definition to its caller.
+--- - `open_cmd` / `open_url_cmd`: Override how local files / URLs are opened.
+--- - `anchor_levels`: Which `#` levels count as headings when jumping via anchors.
+--- - `debug`: If true, center screen (`zz`) after jumps and emit extra notifications.
+--
+---@field keymap string|nil
+--- Normal-mode keymap that calls your main action (e.g. `gx` or `<leader>ol`).
+--- - If `nil`, no mapping is created (you can bind it yourself).
+--- - Expected to be a valid right-hand side for `vim.keymap.set("n", keymap, ...)`.
+--- Example: `"gx"`
+--
+---@field footnote_backref_key string|nil
+--- Normal-mode keymap for “footnote backref” (optional feature).
+--- If you implement footnotes like `[text][^1]` with definitions at the bottom,
+--- this key can jump back to the originating reference from the definition line.
+--- - If `nil`, the mapping is not created.
+--- Example: `"<leader>fb"`
+--
+---@field open_cmd string|string[]|nil
+--- Command used to open **local files** (PDFs, images, etc.) when they are not text-like.
+--- - If `string`, it’s executed as a shell command (not recommended on Windows; use list).
+--- - If `string[]`, it’s treated as argv for `vim.fn.jobstart(argv, {detach=true})`.
+--- - If `nil`, a platform default is used:
+---     Windows: `{"cmd.exe", "/c", "start", "" , <path>}`
+---     macOS:   `{"open", <path>}`
+---     Linux:   `{"xdg-open", <path>}`
+--- Security note: prefer `string[]` to avoid shell injection.
+--- Example: `{ "xdg-open" }` or `{ "open" }`
+--
+---@field open_url_cmd string|string[]|nil
+--- Command used to open **URLs** (`http(s)://…`).
+--- Semantics identical to `open_cmd`, but for web links.
+--- - If `nil`, platform defaults are used (same pattern as above).
+--- Example: `{ "cmd.exe", "/c", "start", "" }`, `{ "open" }`, or `{ "xdg-open" }`
+--
+---@field anchor_levels integer[]
+--- Heading levels (number of `#`) considered when jumping to anchors.
+--- - Used by the anchor resolver (e.g., `[go](#my-heading)`): we search these levels.
+--- - Default is `{1,2,3,4,5,6}` to match all Markdown ATX headings.
+--- - You can narrow the search if you want only top-level sections (e.g., `{1,2}`).
+--
+---@field debug boolean|nil
+--- If true:
+---   - Center the screen (`zz`) after a successful jump (`heading`, `footnote`, etc.).
+---   - Optionally show extra debug notifications/log lines (if you emit them).
+--- Default: `false`.
+
+---@class MdlinksResolvedConfig
+---@field keymap string|nil
+---@field footnote_backref_key string|nil
+---@field open_cmd string[]|nil
+---@field open_url_cmd string[]|nil
+---@field anchor_levels integer[]
+---@field debug boolean
